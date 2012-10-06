@@ -24,11 +24,12 @@ bool Writer::writeComma()
 	return true;
 }
 
-bool Writer::Open(const char *path)
+bool Writer::Open(const TCHAR *path)
 {
 	_comma = false;
 	_eol = false;
-	errno_t error = fopen_s(&_file, path, "w");
+
+	errno_t error = _tfopen_s(&_file, path, _T("w"));
 	return error == 0;
 }
 

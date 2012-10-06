@@ -8,68 +8,40 @@ Copyright 2011 Rick Parrish
 namespace JSON
 {
 
+Reader::Reader() : _quote(false)
+{
+}
+
 bool Reader::space()
 {
-	while (remains)
-	{
-		if (*cursor == ' ' || *cursor == '\t' || *cursor == '\r' || *cursor == '\n')
-		{
-			cursor++;
-			remains--;
-		}
-		else break;
-	}
-	return true;
+	return _parser.skipspace();
 }
 
 bool Reader::match(char match)
 {
-	if (remains && *cursor == match)
-	{
-		cursor++;
-		remains--;
-		return true;
-	}
-	return false;
+	return _parser.parseMatch(match);
 }
 
 bool Reader::literal(const char *match)
 {
-	const char *scan = cursor;
-	size_t leaves = remains;
-	while (leaves && *match && *scan == *match)
-	{
-		match++;
-		scan++;
-		leaves--;
-	}
-	// complete match?
-	if (*match == 0)
-	{
-		cursor = scan;
-		remains = leaves;
-		return true;
-	}
-	return false;
+	return _parser.parseMatch(match);
 }
 
 bool Reader::number(std::string &strValue)
 {
 	strValue.clear();
-	if ( remains && *cursor >= '0' && *cursor <= '9' )
+	while ( !_parser.eof() )
 	{
-		strValue.push_back(*cursor);
-		cursor++;
-		remains--;
-		while ( remains && *cursor >= '0' && *cursor <= '9' )
+		char peek = _parser.peek();
+		if ( peek >= '0' && peek <= '9' )
 		{
-			strValue.push_back(*cursor);
-			cursor++;
-			remains--;
+			strValue.push_back(peek);
+			_parser.consume(1);
 		}
-		return true;
+		else
+			break;
 	}
-	return false;
+	return strValue.size() > 0;
 }
 
 static bool isdigit(char digit, char base = 10)
@@ -77,15 +49,15 @@ static bool isdigit(char digit, char base = 10)
 	switch(base)
 	{
 		case 2:
-			return digit >= '0' && digit <= '1';
+			return digit == '0' || digit == '1';
 
 		case 8:
 			return digit >= '0' && digit <= '7';
 
 		case 16:
 			return digit >= '0' && digit <= '9' ||
-				digit >= 'A' && digit <= 'Z' ||
-				digit >= 'a' && digit <= 'z';
+				digit >= 'A' && digit <= 'F' ||
+				digit >= 'a' && digit <= 'f';
 
 		case 10:
 		default:
@@ -98,22 +70,18 @@ bool Reader::integer(long &iValue)
 {
 	char base = 10;
 	std::string strValue;
-	if (remains > 2 && strncmp(cursor, "0x", 2) == 0)
+
+	if ( _parser.parseMatch("0x") )
 	{
 		base = 16;
-		cursor += 2;
-		remains -= 2;
 	}
-	if ( remains && isdigit(*cursor, base) )
+	if ( isdigit(_parser.peek(), base) )
 	{
-		strValue.push_back(*cursor);
-		cursor++;
-		remains--;
-		while ( remains && isdigit(*cursor, base) )
+		strValue.push_back(_parser.peek());
+		_parser.consume(1);
+		while ( !_parser.eof() && isdigit(_parser.peek(), base) )
 		{
-			strValue.push_back(*cursor);
-			cursor++;
-			remains--;
+			strValue.push_back(_parser.peek());
 		}
 		iValue = strtol(strValue.c_str(), NULL, base);
 		return true;
@@ -124,16 +92,14 @@ bool Reader::integer(long &iValue)
 bool Reader::decimal(double &fValue)
 {
 	std::string strValue;
-	if ( remains && *cursor >= '0' && *cursor <= '9' )
+	if ( !_parser.eof() && _parser.peek() >= '0' && _parser.peek() <= '9' )
 	{
-		strValue.push_back(*cursor);
-		cursor++;
-		remains--;
-		while ( remains && *cursor >= '0' && *cursor <= '9' )
+		strValue.push_back(_parser.peek());
+		_parser.consume(1);
+		while ( !_parser.eof() && _parser.peek() >= '0' && _parser.peek() <= '9' )
 		{
-			strValue.push_back(*cursor);
-			cursor++;
-			remains--;
+			strValue.push_back(_parser.peek());
+			_parser.consume(1);
 		}
 		fValue = strtod(strValue.c_str(), NULL);
 		return true;
@@ -143,26 +109,26 @@ bool Reader::decimal(double &fValue)
 
 bool Reader::string(std::string &strValue)
 {
-	if ( match('"') )
+	if ( _quote || match('"') )
 	{
+		_quote = true;
 		strValue.clear();
 		// TODO: remember where we saw opening quote in case no closing quote.
-		while (1)
+		while ( !_parser.eof() )
 		{
 			if ( match('"') )
 			{
+				_quote = false;
 				return true;
 			}
-			else if (remains)
+			else
 			{
-				strValue.push_back(*cursor);
+				strValue.push_back(_parser.peek());
 				// consume
-				cursor++;
-				remains--;
+				_parser.consume(1);
 			}
-			else break;
+			throw __LINE__; // bad syntax
 		}
-		throw __LINE__; // bad syntax
 	}
 	return false;
 }
@@ -184,23 +150,15 @@ bool Reader::array()
 	if ( match('[') )
 	{
 		space();
-		if ( value() )
+		while ( value() )
 		{
 			space();
 			if ( match(',') )
 			{
 				space();
-				while ( value() )
-				{
-					space();
-					if ( match(',') )
-					{
-						space();
-						continue;
-					}
-					break;
-				}
+				continue;
 			}
+			break;
 		}
 		if ( endArray() )
 		{
@@ -262,9 +220,6 @@ bool Reader::beginArray()
 
 bool Reader::beginNamedArray(const char *name)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -274,9 +229,8 @@ bool Reader::beginNamedArray(const char *name)
 			if (beginArray())
 				return true;
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
@@ -307,9 +261,6 @@ bool Reader::null()
 
 bool Reader::namedValue(const char *name, std::string &value)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -321,9 +272,8 @@ bool Reader::namedValue(const char *name, std::string &value)
 				return true;
 			}
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
@@ -343,9 +293,6 @@ bool Reader::namedValue(const char *name, std::wstring &value)
 
 bool Reader::namedValue(const char *name, bool &bValue)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -357,17 +304,13 @@ bool Reader::namedValue(const char *name, bool &bValue)
 				return true;
 			}
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
 bool Reader::namedValue(const char *name, long &iValue)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -379,17 +322,13 @@ bool Reader::namedValue(const char *name, long &iValue)
 				return true;
 			}
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
 bool Reader::namedValue(const char *name, double &fValue)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -401,17 +340,13 @@ bool Reader::namedValue(const char *name, double &fValue)
 				return true;
 			}
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
 bool Reader::beginNamedObject(const char *name)
 {
-	const char *keep = cursor;
-	size_t leaves = remains;
-
 	if ( quotedLiteral(name) )
 	{
 		space();
@@ -421,35 +356,29 @@ bool Reader::beginNamedObject(const char *name)
 			if ( beginObject() )
 				return true;
 		}
+		throw __LINE__;
 	}
-	cursor = keep;
-	remains = leaves;
 	return false;
 }
 
 bool Reader::quotedLiteral(const char *match)
 {
 	space();
-	const char *scan = cursor;
-	size_t leaves = remains;
-	if (leaves && *scan == '"')
+	if ( !_parser.eof() && (_quote || _parser.parseMatch('"')) )
 	{
-		scan++;
-		leaves--;
-		while (leaves && *match && *scan == *match)
-		{
-			match++;
-			scan++;
-			leaves--;
-		}
+		// remember the quote.
+		_quote = true;
 		// complete match?
-		if (*match == 0 && leaves && *scan == '"')
+		if ( _parser.parseMatch(match) )
 		{
-			scan++;
-			leaves--;
-			cursor = scan;
-			remains = leaves;
-			return true;
+			// if this fails, we've gone too far and can't back out.
+			if ( _parser.parseMatch('"') )
+			{
+				_quote = false;
+				return true;
+			}
+			else
+				throw __LINE__;
 		}
 	}
 	return false;
@@ -461,14 +390,18 @@ bool Reader::comma()
 	return match(',');
 }
 
+#include "../Stream/MemoryInputStream.h"
+
 static void testJSON()
 {
 	static const char text[] = 
 		"{\"a\" : \"me\", \"b\" : false, \"c\" : 12.3, \"d\" : 123 }";
 
-	Reader json(text, sizeof text);
+	MemoryInputStream stream(reinterpret_cast<const unsigned char *>(&text[0]), sizeof text);
 
-	if ( json.beginObject() )
+	Reader json;
+
+	if ( json.open(&stream) && json.beginObject() )
 	{
 		std::string value;
 		bool bValue = false;
@@ -487,6 +420,16 @@ static void testJSON()
 			puts("fail");
 		}
 	}
+}
+
+bool Reader::open(IInputStream *stream)
+{
+	return _parser.open(stream);
+}
+
+void Reader::close()
+{
+	_parser.close();
 }
 
 };

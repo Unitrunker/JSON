@@ -1,5 +1,6 @@
 #include <string>
 #include <stack>
+#include <tchar.h>
 
 /*
 Copyright 2011 Rick Parrish
@@ -13,7 +14,7 @@ namespace JSON
 struct Writer
 {
 	Writer();
-	bool Open(const char *path);
+	bool Open(const TCHAR *path);
 	bool writeStartObject();
 	bool writeName(const char *name);
 	bool writeStartNamedObject(const char *name);

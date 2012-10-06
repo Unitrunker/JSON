@@ -1,5 +1,6 @@
 #include <string>
 #include <stack>
+#include "../Stream/Parser.h"
 
 /*
 Copyright 2011 Rick Parrish
@@ -12,7 +13,7 @@ namespace JSON
 
 struct Reader
 {
-	Reader(const char *text, size_t length) : cursor(text), remains(length) { };
+	Reader();
 	bool beginObject();
 	bool endObject();
 	bool beginArray();
@@ -31,9 +32,12 @@ struct Reader
     bool namedValue(const char *name, double &fValue);
 	bool beginNamedObject(const char *name);
 	bool comma();
+
+	bool open(IInputStream *stream);
+	void close();
 private:
-	const char* cursor;
-	size_t remains;
+	Parser _parser;
+	bool _quote;
 
 	bool object();
 	bool array();
