@@ -32,10 +32,11 @@ bool Reader::number(std::string &strValue)
 	strValue.clear();
 	while ( !_parser.eof() )
 	{
-		char peek = _parser.peek();
+		int peek = _parser.peek();
 		if ( peek >= '0' && peek <= '9' )
 		{
-			strValue.push_back(peek);
+			char ch = static_cast<char>(peek);
+			strValue.push_back(ch);
 			_parser.consume(1);
 		}
 		else
@@ -44,44 +45,24 @@ bool Reader::number(std::string &strValue)
 	return strValue.size() > 0;
 }
 
-static bool isdigit(char digit, char base = 10)
-{
-	switch(base)
-	{
-		case 2:
-			return digit == '0' || digit == '1';
-
-		case 8:
-			return digit >= '0' && digit <= '7';
-
-		case 16:
-			return digit >= '0' && digit <= '9' ||
-				digit >= 'A' && digit <= 'F' ||
-				digit >= 'a' && digit <= 'f';
-
-		case 10:
-		default:
-			break;
-	}
-	return digit >= '0' && digit <= '9';
-}
-
 bool Reader::integer(long &iValue)
 {
-	char base = 10;
+	unsigned char base = 10;
 	std::string strValue;
 
 	if ( _parser.parseMatch("0x") )
 	{
 		base = 16;
 	}
-	if ( isdigit(_parser.peek(), base) )
+	if ( _parser.isdigit(base) )
 	{
-		strValue.push_back(_parser.peek());
+		char peek = static_cast<char>(_parser.peek());
+		strValue.push_back(peek);
 		_parser.consume(1);
-		while ( !_parser.eof() && isdigit(_parser.peek(), base) )
+		while ( !_parser.eof() && _parser.isdigit(base) )
 		{
-			strValue.push_back(_parser.peek());
+			peek = static_cast<char>(_parser.peek());
+			strValue.push_back(peek);
 		}
 		iValue = strtol(strValue.c_str(), NULL, base);
 		return true;
@@ -92,13 +73,15 @@ bool Reader::integer(long &iValue)
 bool Reader::decimal(double &fValue)
 {
 	std::string strValue;
-	if ( !_parser.eof() && _parser.peek() >= '0' && _parser.peek() <= '9' )
+	if ( !_parser.eof() && _parser.isdigit(10) )
 	{
-		strValue.push_back(_parser.peek());
+		char peek = static_cast<char>(_parser.peek());
+		strValue.push_back(peek);
 		_parser.consume(1);
-		while ( !_parser.eof() && _parser.peek() >= '0' && _parser.peek() <= '9' )
+		while ( !_parser.eof() && _parser.isdigit(10) )
 		{
-			strValue.push_back(_parser.peek());
+			peek = static_cast<char>(_parser.peek());
+			strValue.push_back(peek);
 			_parser.consume(1);
 		}
 		fValue = strtod(strValue.c_str(), NULL);
@@ -123,7 +106,8 @@ bool Reader::string(std::string &strValue)
 			}
 			else
 			{
-				strValue.push_back(_parser.peek());
+				char peek = static_cast<char>(_parser.peek());
+				strValue.push_back(peek);
 				// consume
 				_parser.consume(1);
 			}
@@ -284,7 +268,7 @@ bool Reader::namedValue(const char *name, std::wstring &value)
 	if (bOK)
 	{
 		size_t size = text.size();
-		value.resize(' ', size * 2 + 1);
+		value.resize(size * 2 + 1, L' ');
 		mbstowcs_s(&size, &value[0], value.size(), text.c_str(), text.size());
 		value.resize(size);
 	}

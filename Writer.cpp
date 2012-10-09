@@ -66,10 +66,10 @@ bool Writer::writeNamedValue(const char *name, const wchar_t *value)
 {
 	std::string text;
 	size_t size = wcslen(value);
-	text.resize( ' ', size * 2 + 1 );
+	text.resize(size * 2 + 1, ' ');
 	wcstombs_s(&size, &text[0], text.size(), value, size);
 	text.resize(size);
-	return writeName(text.c_str());
+	return writeNamedValue(name, text.c_str());
 }
 
 bool Writer::writeNamedValue(const char *name, const bool value)
