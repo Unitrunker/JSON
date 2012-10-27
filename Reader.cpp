@@ -56,12 +56,11 @@ bool Reader::integer(long &iValue)
 	}
 	if ( _parser.isdigit(base) )
 	{
-		char peek = static_cast<char>(_parser.peek());
+		char peek = static_cast<char>(_parser.readChar());
 		strValue.push_back(peek);
-		_parser.consume(1);
 		while ( !_parser.eof() && _parser.isdigit(base) )
 		{
-			peek = static_cast<char>(_parser.peek());
+			peek = static_cast<char>(_parser.readChar());
 			strValue.push_back(peek);
 		}
 		iValue = strtol(strValue.c_str(), NULL, base);
@@ -75,12 +74,11 @@ bool Reader::decimal(double &fValue)
 	std::string strValue;
 	if ( !_parser.eof() && _parser.isdigit(10) )
 	{
-		char peek = static_cast<char>(_parser.peek());
+		char peek = static_cast<char>(_parser.readChar());
 		strValue.push_back(peek);
-		_parser.consume(1);
 		while ( !_parser.eof() && _parser.isdigit(10) )
 		{
-			peek = static_cast<char>(_parser.peek());
+			peek = static_cast<char>(_parser.readChar());
 			strValue.push_back(peek);
 			_parser.consume(1);
 		}
@@ -106,13 +104,11 @@ bool Reader::string(std::string &strValue)
 			}
 			else
 			{
-				char peek = static_cast<char>(_parser.peek());
+				char peek = static_cast<char>(_parser.readChar());
 				strValue.push_back(peek);
-				// consume
-				_parser.consume(1);
 			}
-			throw __LINE__; // bad syntax
 		}
+		throw __LINE__; // bad syntax
 	}
 	return false;
 }
